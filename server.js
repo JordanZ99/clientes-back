@@ -5,26 +5,28 @@ const cors = require('cors');
 const mysql = require('mysql2/promise');
 const app = express();
 
-// 2. Configuración de variables y conexión
-const PORT = process.env.PORT || 3000; // Definimos qué puerto usaremos
-const connection = mysql.createConnection({
-    // Usamos 'process.env' para asegurarnos de que la conexión lea
-    // los valores que están en nuestro .env, no valores fijos.
+// 2. Configuración de la Base de Datos (Pool de conexiones)
+const PORT = process.env.PORT || 3000;
+const pool = mysql.createPool({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
+    database: process.env.DB_NAME,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 });
 
-// 💡 Lógica de Conexión: Esto es crucial. No podemos usar el API si no estamos conectados a la BD.
-connection.connect(err => {
-    if (err) {
+// Verificación inicial de conexión
+pool.getConnection()
+    .then(conn => {
+        console.log("✅ CONEXIÓN EXITOSA: ¡El backend está listo para trabajar!");
+        conn.release();
+    })
+    .catch(err => {
         console.error("❌ ERROR FATAL: No se pudo conectar a la base de datos.");
         console.error(err);
-        process.exit(1); // Si falla la conexión, la app se detiene
-    }
-    console.log("✅ CONEXIÓN EXITOSA: ¡El backend está listo para trabajar con la base de datos!");
-});
+    });
 
 
 // 3. Middleware (Preparar Express)
@@ -41,7 +43,7 @@ app.get('/clientes', async (req, res) => {
 
     try {
         // Ejecutar la consulta de forma asíncrona y segura
-        const [rows] = await connection.execute(sql);
+        const [rows] = await pool.execute(sql);
 
         // Si todo salió bien (Status 200 = OK)
         res.status(200).json({
